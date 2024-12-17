@@ -1,9 +1,30 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 const ARENA_WIDTH: u32 = 10;
 const ARENA_HEIGHT: u32 = 10;
 
 const SNAKE_HEAD_COLOR: Color = Color::srgb(0.7, 0.7, 0.7);
+
+#[derive(PartialEq, Clone, Copy)]
+enum Direction {
+    Left,
+    Up,
+    Right,
+    Down,
+}
+
+impl Direction {
+    fn opposite(self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+        }
+    }
+}
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct Position {
@@ -27,7 +48,12 @@ impl Size {
 }
 
 #[derive(Component)]
-struct SnakeHead;
+struct SnakeHead {
+    direction: Direction,
+}
+
+#[derive(Resource)]
+struct FixedTimer(Timer);
 
 fn main() {
     App::new()
@@ -40,8 +66,12 @@ fn main() {
             ..default()
         }))
         .insert_resource(ClearColor(Color::srgb(0.04, 0.04, 0.04)))
+        .insert_resource(FixedTimer(Timer::new(
+            Duration::from_millis(250),
+            TimerMode::Repeating,
+        )))
         .add_systems(Startup, (setup_camera, spawn_snake))
-        .add_systems(Update, snake_movement)
+        .add_systems(Update, (snake_movement_input, snake_movement).chain())
         .add_systems(PostUpdate, (position_translation, size_scaling))
         .run();
 }
@@ -87,28 +117,60 @@ fn spawn_snake(mut commands: Commands) {
                 ..default()
             },
         ))
-        .insert((SnakeHead, Position { x: 3, y: 3 }, Size::square(0.8)));
+        .insert((
+            SnakeHead {
+                direction: Direction::Up,
+            },
+            Position { x: 3, y: 3 },
+            Size::square(0.8),
+        ));
+}
+
+fn snake_movement_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut heads: Query<&mut SnakeHead>,
+) {
+    if let Some(mut head) = heads.iter_mut().next() {
+        let dir: Direction = if keyboard_input.pressed(KeyCode::ArrowLeft) {
+            Direction::Left
+        } else if keyboard_input.pressed(KeyCode::ArrowDown) {
+            Direction::Down
+        } else if keyboard_input.pressed(KeyCode::ArrowUp) {
+            Direction::Up
+        } else if keyboard_input.pressed(KeyCode::ArrowRight) {
+            Direction::Right
+        } else {
+            head.direction
+        };
+        if dir != head.direction.opposite() {
+            head.direction = dir;
+        }
+    }
 }
 
 fn snake_movement(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut head_positions: Query<&mut Position, With<SnakeHead>>,
+    time: Res<Time>,
+    mut timer: ResMut<FixedTimer>,
+    mut heads: Query<(&mut Position, &SnakeHead)>,
 ) {
-    for mut pos in head_positions.iter_mut() {
-        if keyboard_input.pressed(KeyCode::ArrowLeft) {
-            pos.x -= 1;
-        }
+    if !timer.0.tick(time.delta()).just_finished() {
+        return;
+    }
 
-        if keyboard_input.pressed(KeyCode::ArrowRight) {
-            pos.x += 1;
-        }
-
-        if keyboard_input.pressed(KeyCode::ArrowDown) {
-            pos.y -= 1;
-        }
-
-        if keyboard_input.pressed(KeyCode::ArrowUp) {
-            pos.y += 1;
-        }
+    if let Some((mut head_pos, head)) = heads.iter_mut().next() {
+        match &head.direction {
+            Direction::Left => {
+                head_pos.x -= 1;
+            }
+            Direction::Right => {
+                head_pos.x += 1;
+            }
+            Direction::Up => {
+                head_pos.y += 1;
+            }
+            Direction::Down => {
+                head_pos.y -= 1;
+            }
+        };
     }
 }
