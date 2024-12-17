@@ -1,11 +1,12 @@
-use std::time::Duration;
-
 use bevy::prelude::*;
+use rand::prelude::random;
+use std::time::Duration;
 
 const ARENA_WIDTH: u32 = 10;
 const ARENA_HEIGHT: u32 = 10;
 
 const SNAKE_HEAD_COLOR: Color = Color::srgb(0.7, 0.7, 0.7);
+const FOOD_COLOR: Color = Color::srgb(1.0, 0.0, 1.0);
 
 #[derive(PartialEq, Clone, Copy)]
 enum Direction {
@@ -52,8 +53,14 @@ struct SnakeHead {
     direction: Direction,
 }
 
+#[derive(Component)]
+struct Food;
+
 #[derive(Resource)]
 struct FixedTimer(Timer);
+
+#[derive(Resource)]
+struct FoodSpawnerTimer(Timer);
 
 fn main() {
     App::new()
@@ -70,8 +77,15 @@ fn main() {
             Duration::from_millis(250),
             TimerMode::Repeating,
         )))
+        .insert_resource(FoodSpawnerTimer(Timer::new(
+            Duration::from_secs(1),
+            TimerMode::Repeating,
+        )))
         .add_systems(Startup, (setup_camera, spawn_snake))
-        .add_systems(Update, (snake_movement_input, snake_movement).chain())
+        .add_systems(
+            Update,
+            ((snake_movement_input, snake_movement).chain(), food_spawner),
+        )
         .add_systems(PostUpdate, (position_translation, size_scaling))
         .run();
 }
@@ -173,4 +187,24 @@ fn snake_movement(
             }
         };
     }
+}
+
+fn food_spawner(time: Res<Time>, mut timer: ResMut<FoodSpawnerTimer>, mut commands: Commands) {
+    if !timer.0.tick(time.delta()).just_finished() {
+        return;
+    }
+
+    commands
+        .spawn(Sprite {
+            color: FOOD_COLOR,
+            ..default()
+        })
+        .insert((
+            Food,
+            Position {
+                x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
+                y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            },
+            Size::square(0.8),
+        ));
 }
