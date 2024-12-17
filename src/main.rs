@@ -31,7 +31,15 @@ struct SnakeHead;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "Snake!".to_string(),
+                resolution: (500.0, 500.0).into(),
+                ..default()
+            }),
+            ..default()
+        }))
+        .insert_resource(ClearColor(Color::srgb(0.04, 0.04, 0.04)))
         .add_systems(Startup, (setup_camera, spawn_snake))
         .add_systems(Update, snake_movement)
         .add_systems(PostUpdate, (position_translation, size_scaling))
